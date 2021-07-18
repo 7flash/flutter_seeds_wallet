@@ -17,8 +17,8 @@ class ProfileRepository extends NetworkRepository with EosRepository {
     print('[http] get seeds getProfile $accountName');
 
     var request = createRequest(
-      code: account_seeds,
-      scope: account_seeds,
+      code: account_accounts,
+      scope: account_accounts,
       table: table_users,
       lowerBound: accountName,
       upperBound: accountName,
@@ -47,7 +47,7 @@ class ProfileRepository extends NetworkRepository with EosRepository {
 
     var transaction = buildFreeTransaction([
       Action()
-        ..account = account_seeds
+        ..account = account_accounts
         ..name = action_name_update
         ..authorization = [
           Authorization()
@@ -106,8 +106,8 @@ class ProfileRepository extends NetworkRepository with EosRepository {
     print('[http] get Referred Accounts $accountName');
 
     var request = createRequest(
-      code: account_seeds,
-      scope: account_seeds,
+      code: account_accounts,
+      scope: account_accounts,
       table: table_refs,
       lowerBound: '$accountName',
       upperBound: '$accountName',
@@ -124,7 +124,7 @@ class ProfileRepository extends NetworkRepository with EosRepository {
         .catchError((error) => mapHttpError(error));
   }
 
-  Future<Result> plantSeeds({double? amount, String? accountName}) async {
+  Future<Result> plantSeeds({required double amount, required String accountName}) async {
     print('[eos] plant seeds ($amount)');
 
     var transaction = buildFreeTransaction([
@@ -139,8 +139,57 @@ class ProfileRepository extends NetworkRepository with EosRepository {
         ..data = {
           'from': accountName,
           'to': account_harvest,
-          'quantity': '${amount!.toStringAsFixed(4)} $currencySeedsCode',
+          'quantity': '${amount.toStringAsFixed(4)} $currencySeedsCode',
           'memo': '',
+        }
+    ], accountName);
+
+    return buildEosClient()
+        .pushTransaction(transaction, broadcast: true)
+        .then((dynamic response) => mapEosResponse(response, (dynamic map) {
+              return TransactionResponse.fromJson(map);
+            }))
+        .catchError((error) => mapEosError(error));
+  }
+
+  Future<Result> makeCitizen(String accountName) async {
+    return citizenshipAction(accountName: accountName, isMake: true, isCitizen: true);
+  }
+
+  Future<Result> makeResident(String accountName) async {
+    return citizenshipAction(accountName: accountName, isMake: true, isCitizen: false);
+  }
+
+  Future<Result> canCitizen(String accountName) async {
+    return citizenshipAction(accountName: accountName, isMake: false, isCitizen: true);
+  }
+
+  Future<Result> canResident(String accountName) async {
+    return citizenshipAction(accountName: accountName, isMake: false, isCitizen: false);
+  }
+
+  Future<Result> citizenshipAction({required String accountName, required bool isMake, required bool isCitizen}) async {
+    print('[eos] ' + (isMake ? "make" : "can") + " " + (isCitizen ? "citizen" : "resident"));
+
+    var actionName = isMake
+        ? isCitizen
+            ? action_name_makecitizen
+            : action_name_makeresident
+        : isCitizen
+            ? action_name_cancitizen
+            : action_name_canresident;
+
+    var transaction = buildFreeTransaction([
+      Action()
+        ..account = account_accounts
+        ..name = actionName
+        ..authorization = [
+          Authorization()
+            ..actor = accountName
+            ..permission = permission_active
+        ]
+        ..data = {
+          'user': accountName,
         }
     ], accountName);
 
